@@ -1,0 +1,27 @@
+<!--
+  Generated template for the BebidasPage page.
+
+  See http://ionicframework.com/docs/components/#navigation for more info on
+  Ionic pages and navigation.
+-->
+<ion-header>
+
+  <ion-navbar>
+    <ion-title>Bebidas</ion-title>
+  </ion-navbar>
+
+</ion-header>
+
+
+<ion-content padding>
+  <ion-list *ngFor="let bebida of bebidas | async">
+    <ion-item>
+      <ion-thumbnail item-start>
+        <img src={{bebida.img}}>
+      </ion-thumbnail>
+      <h2>{{bebida.nombre}}</h2>
+      <p>{{bebida.marca}}, {{bebida.precio}}.00</p>
+      <button ion-button clear item-end>View</button>
+    </ion-item>
+  </ion-list>
+</ion-content>
