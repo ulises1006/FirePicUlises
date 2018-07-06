@@ -1,0 +1,41 @@
+<ion-header>
+
+  <ion-navbar>
+    <ion-title>Agregar platillo</ion-title>
+
+    <button ion-button clear item-end (tap)="close()">Cerrar</button>
+  </ion-navbar>
+
+</ion-header>
+
+
+<ion-content padding>
+
+    <ion-list no-lines>
+    
+      <ion-item>
+        <ion-label fixed>Nombre</ion-label>
+        <ion-input [(ngModel)]="nombre" type="text" value=""></ion-input>
+      </ion-item>
+    
+      <ion-item>
+        <ion-label fixed>Tipo</ion-label>
+        <ion-input [(ngModel)]="tipo" type="text"></ion-input>
+      </ion-item>
+    
+      <ion-item> 
+        <ion-label fixed>Imagen</ion-label>
+        <ion-input [(ngModel)]="img" type="text"></ion-input>
+        <button ion-button item-end large (click)="selectImageCamera()"><ion-icon name="camera"></ion-icon></button>
+        <button ion-button item-end large (click)="selectImageGallery()"><ion-icon name="images"></ion-icon></button>
+      </ion-item>
+    
+      <ion-item *ngFor="let item of assetCollection ; trackBy:trackByFunction">
+        <img [src]=item.URL width="180px" class="padding">
+      </ion-item>
+
+      <button ion-button block (tap)="agregarPlatillo()">Agregar</button>
+    
+    </ion-list>
+
+</ion-content>

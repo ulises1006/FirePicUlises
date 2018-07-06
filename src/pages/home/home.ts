@@ -1,9 +1,10 @@
 import { Component } from '@angular/core';
-import { NavController } from 'ionic-angular';
+import { NavController, ModalController } from 'ionic-angular';
 import { AngularFirestore, AngularFirestoreCollection } from 'angularfire2/firestore';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Platillo } from '../../commons/platillo'
+import { AgregarPage } from '../agregar/agregar';
 
 @Component({
   selector: 'page-home',
@@ -15,7 +16,7 @@ export class HomePage {
 
   platillos: Observable<Platillo[]>;
 
-  constructor(private readonly afs: AngularFirestore) {
+  constructor(private readonly afs: AngularFirestore, public modalCtrl: ModalController) {
 
     this.itemsCollection = afs.collection<Platillo>('platillos');
     this.platillos = this.itemsCollection.snapshotChanges().pipe(
@@ -27,4 +28,8 @@ export class HomePage {
     );
   }
 
+  openModal() {
+    let profileModal = this.modalCtrl.create(AgregarPage);
+    profileModal.present();
+  }
 }
