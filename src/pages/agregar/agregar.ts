@@ -7,15 +7,23 @@ import { ToastController } from 'ionic-angular';
 import { AngularFirestore, AngularFirestoreCollection } from 'angularfire2/firestore';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Platillo } from '../../commons/platillo';
-import { ImagePicker } from '@ionic-native/image-picker';
 import { FirebaseServiceProvider } from '../../providers/firebase-service/firebase-service';
 import { normalizeURL } from 'ionic-angular';
+import { AngularFireStorage } from 'angularfire2/storage';
+
+import { Platillo } from '../../commons/platillo';
+
+import { ImagePicker, ImagePickerOptions } from '@ionic-native/image-picker';
+
 import { async } from 'rxjs/internal/scheduler/async';
+import { finalize } from 'rxjs/operators';
+
 import { CameraOptions, Camera } from '@ionic-native/camera';
+
 import { storage } from 'firebase';
 import 'whatwg-fetch';
 import firebase from 'firebase';
+
 
 @Component({
   selector: 'page-agregar',
@@ -30,7 +38,15 @@ export class AgregarPage {
   nombre: any;
   tipo: any;
   img: any;
-  assetCollection
+  assetCollection;
+
+  //Miniatura de la Imagen
+  imagePreview: string = "";
+  //Imagen en formato para subir
+  imagen64: string;
+  //Observables
+  uploadPercent: Observable<number>;
+  downloadURL: Observable<string>;
 
   constructor(public readonly afs: AngularFirestore,
     public viewCtrl: ViewController,
@@ -39,7 +55,8 @@ export class AgregarPage {
     public imagePicker: ImagePicker,
     public firebaseServiceProvider: FirebaseServiceProvider,
     public platform: Platform,
-    public camera: Camera) {
+    public camera: Camera,
+    public fireStorage: AngularFireStorage) {
   }
 
   agregarPlatillo() {
@@ -55,7 +72,7 @@ export class AgregarPage {
      ); */
 
     const id = this.afs.createId();
-    if (this.nombre != null && this.tipo != null && this.img != null) {
+    if (this.nombre != null && this.tipo != null) {
       const plato: Platillo = { 'nombre': this.nombre, 'tipo': this.tipo, 'img': this.img }
       console.table(plato);
       this.afs.collection('platillos').doc(id).set(plato);
@@ -86,153 +103,146 @@ export class AgregarPage {
     console.log('ionViewDidLoad AgregarPage');
   }
 
-  loadData() {
-    var result = [];
-    // load data from firebase...
-    firebase.database().ref('platillo').orderByKey().once('value', (_snapshot: any) => {
 
-      _snapshot.forEach((_childSnapshot) => {
-        // get the key/id and the data for display
-        var element = _childSnapshot.val();
-        element.id = _childSnapshot.key;
+agregarPlatillo2() {
+  console.log("platillo agregado");
 
-        result.push(element);
-      });
+  this.itemsCollection = this.afs.collection<Platillo>('platillo');
+  /* this.platillos = this.itemsCollection.snapshotChanges().pipe(
+     map(actions => actions.map(a => {
+       const data = a.payload.doc.data() as Platillo;
+       const id = a.payload.doc.id;
+       return { id, ...data };
+     }))
+   ); */
 
-      this.assetCollection = result;
+  const id = this.afs.createId(); //Crea un ID automáticamente
+  //El registro debe ser completo
+  if (this.nombre != null && this.tipo != null && this.img != null) {
+    //Cargando la imagen en el servidor
+    const file = this.imagePreview;
+    const filePath = '/platillos/' + this.nombre;
+    const fileRef = this.fireStorage.ref(filePath);
+    //Carga de imagen por funcion "upload"
+    const task = this.fireStorage.upload(filePath, file);
+    this.presentToast("Cargando imagen...");
 
-  });
+    // Mostrando el porcentage de carga
+    this.uploadPercent = task.percentageChanges();
+    // cuando el URL de descarga se encuentra disponible
+    task.snapshotChanges().pipe(
+      finalize(() => {
+        this.downloadURL = fileRef.getDownloadURL();
+        this.downloadURL.subscribe(imgURL => {
+          //console.log("imgURL: " + imgURL);
+          this.img = imgURL;
+
+          //La imagen ya se encuentra disponible (deberia)
+          //Creando arreglo/objeto para su posterior envío
+          const plato: Platillo = { 'nombre': this.nombre, 'tipo': this.tipo, 'img': this.img }
+          console.table(plato);
+          //Registrando en Firebase
+          this.afs.collection('platillos').doc(id).set(plato);
+          //Registro exitoso (o deberia)
+          this.presentToast("¡platillo agregado!");
+          //Cerrando registro
+          this.viewCtrl.dismiss();
+
+        }, (err) => {
+          console.log("Error al cargar", err);
+          this.presentToast("¡La imagen no pudo subirse!");
+        });
+
+      }
+      )
+    )
+      .subscribe()
+
+  } else {
+    //El registro no es completo
+    this.presentToast("¡Platillo Incompleto!");
+  }
+
 }
 
-  makeFileIntoBlob(_imagePath){
-    return fetch(_imagePath).then((_reponse)=>{
-      return _reponse.blob();
-    }).then((_bolb)=>{
-      return _bolb;
-    });
+selectImageCamera(src:number) {
+
+  //Formato de la imagen a tomar
+  const config: CameraOptions = {
+    quality: 50,
+    destinationType: this.camera.DestinationType.DATA_URL,
+    encodingType: this.camera.EncodingType.JPEG,
+    saveToPhotoAlbum: true,
+    mediaType: this.camera.MediaType.PICTURE,
+    sourceType: src // 0 = Galeria, 1 = Camara
   }
 
-  saveToDatabaseAssetList(_uploadSnapshot){
-    var ref = firebase.database().ref('assets');
-
-    return new Promise((resolve, reject)=>{
-      var DataToSave = {
-        'URL': _uploadSnapshot.downloadURL,
-        'name': _uploadSnapshot.metadata.name,
-        'owner': firebase.auth().currentUser.uid,
-        'email': firebase.auth().currentUser.email,
-        'lastUpdated': new Date().getTime(),
-      };
-      ref.push(DataToSave, (_response)=>{
-        resolve(_response); 
-      }),(_error) =>{
-        reject(_error);
-      }
-    });
-  }
-
-
-  selectImageCamera() {
+  //Promesa: Sí se pudo tomar la foto con la configuración indicada..
+  this.camera.getPicture(config).then((imageData) => {
+    // imageData is either a base64 encoded string or a file URI
+    // If it's base64 (DATA_URL):
+    this.imagePreview = 'data:image/jpeg;base64,' + imageData;
+    this.imagen64 = imageData;
     
-      /*const options: CameraOptions = {
-        quality: 50,
-        targetHeight: 500,
-        targetWidth: 500,
-        destinationType: this.camera.DestinationType.DATA_URL,
-        encodingType: this.camera.EncodingType.JPEG,
-        mediaType: this.camera.MediaType.PICTURE,
-      }
-      this.camera.getPicture(options).then((imageData) => {
-        // imageData is either a base64 encoded string or a file URI
-        // If it's base64 (DATA_URL):
-        let Image = 'data:image/jpeg;base64,' + imageData;
-        const pictures = storage().ref('platillos/pictures');
-        pictures.putString(Image, 'data_url');
-       }, (err) => {
-        this.presentToast('ERROR EN CAMARAA' + err);
-       });
-*/
-       this.camera.getPicture({
-         destinationType: this.camera.DestinationType.FILE_URI,
-         sourceType: this.camera.PictureSourceType.CAMERA,
-         targetHeight: 640,
-         correctOrientation: true
-       }).then((_imagePath)=>{
-         this.presentToast('obteniendo path de imagen'+ _imagePath);
-         return this.makeFileIntoBlob(_imagePath); 
-       }).then((_imageBlob)=> {
-        this.presentToast('imagen convertida: '+ _imageBlob);
+    this.uploadFile(imageData);
+  }, (err) => {
+    console.log("Error en cámara", JSON.stringify(err));
+    this.presentToast("¡No se pudo tomar la foto!");
+  });
 
-      //upload blob
-        this.uploadImageToFirebase(_imageBlob);
-      }).then ((_uploadSnapshot:any) =>{
-        this.presentToast('IMAGEN SUBIDA'+ _uploadSnapshot.downloadURL); 
-        this.img = _uploadSnapshot.downloadURL;
+}
 
+//Función de Galería
+selectImageGallery() {
 
-        //storeage reference to storage in database
-        return this.saveToDatabaseAssetList(_uploadSnapshot);
-      }).then ((_uploadSnapshot:any) =>{
-        this.presentToast('Filw saved to asset catalog successfully'+ _uploadSnapshot.downloadURL); 
-        
-       }, (_error) => {
-         
-         this.presentToast('Error: '+ _error);
-       });
-      
-    
+  //Configuración de la imagen
+  let conf: ImagePickerOptions = {
+    quality: 50,
+    outputType: 1, //Devuelve un string codificado base-64
+    maximumImagesCount: 1
   }
 
+  //Promesa: sí logra tomar una foto con la configuración dada...
+  this.imagePicker.getPictures(conf).then((results) => {
+    for (var i = 0; i < results.length; i++) {
+      // console.log('Image URI: ' + results[i]);
+      this.imagePreview = 'data:image/jpeg;base64,' + results[i];
+      this.imagen64 = results[i];
 
-  selectImageGallery() {
-    if (!this.platform.is('cordova')) {
-      console.log('');
     }
-    this.imagePicker.hasReadPermission()
-      .then((result) => {
-        if (result == false) {
-          // no callbacks required as this opens a popup which returns
-          async
-          this.imagePicker.requestReadPermission();
-        }
-        else if (result == true) {
-          this.imagePicker.getPictures({
-            maximumImagesCount: 1
-          })
-            .then((results) => {
-              for (var i = 0; i < results.length; i++) {
-                this.presentToast('Imagen' + this.uploadImageToFirebase(results[i]));
-                this.uploadImageToFirebase(results[i]);
-              }
-            }, (err) => this.presentToast('ERROR' + err));
-        }
-      }, (err) => {
-        this.presentToast('ERROR' + err);
-      });
-  }
+  }, (err) => {
+    console.log("ERROR: la imagen no es valida: ", JSON.stringify(err));
+    this.presentToast('¡La imagen no es válida!');
+  });
 
-  uploadImageToFirebase(_imageBlob) {
-    /*image = normalizeURL(image);
-    //uploads img to firebase storage
-    this.firebaseServiceProvider.uploadImage(image)
-      .then(photoURL => {
-        this.presentToast('Imagen guardada exitosamente')
-      }), (err) => this.presentToast('ERROR' + err);*/
+}
 
-    var fileName = 'sample-'+new Date().getTime()+ 'jpg';
+  
+//Carga Asicnrona de imagenes (funciona junto a un <input type ="file">)
+uploadFile(event) {
+  const file = event.target.files[0];
+  const filePath = '/platillos/' + this.nombre;
+  const fileRef = this.fireStorage.ref(filePath);
+  const task = this.fireStorage.upload(filePath, file);
 
-    return new Promise((resolve, reject)=>{
-      var fileRef = firebase.storage().ref('platillos/'+fileName);
-      var uploadTask = fileRef.put(_imageBlob);
-      uploadTask.on('state_change', (_snapshot) =>{
-        this.presentToast('SnapShot progress '+_snapshot);
-      },(_error) => {
-        reject(_error);
-      },() =>{
-        resolve(uploadTask.snapshot);
-      });
-    });
-  }
+  // observe percentage changes
+  this.uploadPercent = task.percentageChanges();
+  // get notified when the download URL is available
+  task.snapshotChanges().pipe(
+    finalize(() => {
+      this.downloadURL = fileRef.getDownloadURL();
+      //Tomando la URL tras descargarla
+      this.downloadURL.subscribe(imgURL => {
+        //console.log("imgURL: " + imgURL);
+        this.img = imgURL;
+      })
+
+    }
+    )
+  )
+    .subscribe()
+}
+
 
   presentToast(message) {
     let toast = this.toastCtrl.create({

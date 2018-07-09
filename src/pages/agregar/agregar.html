@@ -23,18 +23,32 @@
         <ion-input [(ngModel)]="tipo" type="text"></ion-input>
       </ion-item>
     
+      <ion-item *ngIf="imagePreview">
+        <img [src]="imagePreview">
+        <div>{{ uploadPercent | async }}</div>
+        <a [href]="downloadURL | async">{{ downloadURL | async }}</a>
+      </ion-item>
+
       <ion-item> 
         <ion-label fixed>Imagen</ion-label>
-        <ion-input [(ngModel)]="img" type="text"></ion-input>
-        <button ion-button item-end large (click)="selectImageCamera()"><ion-icon name="camera"></ion-icon></button>
+        <button ion-button item-end large (click)="selectImageCamera(1)"><ion-icon name="camera"></ion-icon></button>
         <button ion-button item-end large (click)="selectImageGallery()"><ion-icon name="images"></ion-icon></button>
       </ion-item>
     
-      <ion-item *ngFor="let item of assetCollection ; trackBy:trackByFunction">
+      <ion-item *ngFor="let item of assetCollection ; trackBy:trackByFunctison">
         <img [src]=item.URL width="180px" class="padding">
       </ion-item>
 
-      <button ion-button block (tap)="agregarPlatillo()">Agregar</button>
+      <br>
+
+    <input type="file" accept="image/*" (change)="uploadFile($event)" />
+    <div>{{ uploadPercent | async }}</div>
+     <a [href]="downloadURL | async">URL: {{ downloadURL | async }}</a> 
+    
+
+    <br>
+
+      <button ion-button block (tap)="agregarPlatillo2()">Agregar</button>
     
     </ion-list>
 
